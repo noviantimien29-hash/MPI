@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Hukum Coulomb - Drag & Drop</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            box-sizing: border-box;
+        }
+        
+        .charge-positive {
+            background: radial-gradient(circle, #ef4444, #dc2626);
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
+        }
+        
+        .charge-negative {
+            background: radial-gradient(circle, #3b82f6, #2563eb);
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+        }
+        
+        .dragging {
+            transform: scale(1.1);
+            z-index: 50;
+            opacity: 0.8;
+        }
+        
+        .drop-zone {
+            border: 3px dashed #d1d5db;
+            transition: all 0.3s ease;
+        }
+        
+        .drop-zone.drag-over {
+            border-color: #10b981;
+            background-color: rgba(16, 185, 129, 0.1);
+        }
+        
+        .force-line {
+            position: absolute;
+            height: 3px;
+            background: linear-gradient(90deg, #f59e0b, #d97706);
+            transform-origin: left center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .force-line.show {
+            opacity: 1;
+        }
+        
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 min-h-screen">
+    <div class="container mx-auto px-4 py-6">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-white mb-2">⚡ Game Hukum Coulomb ⚡</h1>
+            <p class="text-blue-200 text-lg">Seret muatan listrik dan amati gaya yang terjadi!</p>
+        </div>
+
+        <!-- Score & Level -->
+        <div class="flex justify-between items-center mb-6">
+            <div class="bg-white/10 backdrop-blur-sm rounded-lg px-6 py-3">
+                <span class="text-white font-semibold">Skor: </span>
+                <span id="score" class="text-yellow-400 font-bold text-xl">0</span>
+            </div>
+            <div class="bg-white/10 backdrop-blur-sm rounded-lg px-6 py-3">
+                <span class="text-white font-semibold">Level: </span>
+                <span id="level" class="text-green-400 font-bold text-xl">1</span>
+            </div>
+            <button id="newGame" class="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-bold py-3 px-6 rounded-lg transition-all duration-300 transform hover:scale-105">
+                🎮 Game Baru
+            </button>
+        </div>
+
+        <!-- Game Area -->
+        <div class="bg-white/5 backdrop-blur-sm rounded-2xl p-6 mb-6">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Muatan Bank -->
+                <div class="bg-white/10 rounded-xl p-4">
+                    <h3 class="text-white font-bold text-lg mb-4 text-center">🔋 Bank Muatan</h3>
+                    <div id="chargeBank" class="grid grid-cols-2 gap-3">
+                        <!-- Charges will be generated here -->
+                    </div>
+                    <button id="shuffleCharges" class="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
+                        🔄 Acak Muatan
+                    </button>
+                </div>
+
+                <!-- Workspace -->
+                <div class="bg-white/10 rounded-xl p-4">
+                    <h3 class="text-white font-bold text-lg mb-4 text-center">⚡ Area Kerja</h3>
+                    <div id="workspace" class="relative bg-black/20 rounded-lg h-80 border-2 border-dashed border-gray-400">
+                        <div class="absolute inset-0 flex items-center justify-center text-gray-400 text-sm">
+                            Seret muatan ke sini untuk melihat gaya Coulomb
+                        </div>
+                    </div>
+                    <button id="clearWorkspace" class="w-full mt-4 bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
+                        🗑️ Bersihkan
+                    </button>
+                </div>
+
+                <!-- Info Panel -->
+                <div class="bg-white/10 rounded-xl p-4">
+                    <h3 class="text-white font-bold text-lg mb-4 text-center">📊 Informasi</h3>
+                    <div id="forceInfo" class="space-y-3 text-sm">
+                        <div class="bg-black/20 rounded-lg p-3">
+                            <p class="text-blue-200 mb-1">Rumus Hukum Coulomb:</p>
+                            <p class="text-white font-mono">F = k × |q₁ × q₂| / r²</p>
+                        </div>
+                        <div class="bg-black/20 rounded-lg p-3">
+                            <p class="text-green-200 mb-1">Gaya saat ini:</p>
+                            <p id="currentForce" class="text-white font-semibold">-</p>
+                        </div>
+                        <div class="bg-black/20 rounded-lg p-3">
+                            <p class="text-yellow-200 mb-1">Jarak:</p>
+                            <p id="currentDistance" class="text-white font-semibold">-</p>
+                        </div>
+                        <div class="bg-black/20 rounded-lg p-3">
+                            <p class="text-purple-200 mb-1">Jenis Gaya:</p>
+                            <p id="forceType" class="text-white font-semibold">-</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Challenge -->
+        <div class="bg-gradient-to-r from-green-600/20 to-blue-600/20 backdrop-blur-sm rounded-xl p-6">
+            <h3 class="text-white font-bold text-xl mb-4 text-center">🎯 Tantangan Level <span id="challengeLevel">1</span></h3>
+            <div id="challengeText" class="text-center text-blue-200 text-lg mb-4">
+                Tempatkan dua muatan positif dan amati gaya tolak-menolak!
+            </div>
+            <div class="flex justify-center">
+                <div id="challengeProgress" class="bg-white/20 rounded-full h-4 w-64">
+                    <div id="progressBar" class="bg-gradient-to-r from-green-400 to-blue-500 h-4 rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class CoulombGame {
+            constructor() {
+                this.score = 0;
+                this.level = 1;
+                this.charges = [];
+                this.workspaceCharges = [];
+                this.currentChallenge = 0;
+                this.k = 9e9; // Coulomb constant (simplified)
+                
+                this.challenges = [
+                    { description: "Tempatkan dua muatan positif dan amati gaya tolak-menolak!", target: "repulsion", points: 100 },
+                    { description: "Tempatkan muatan positif dan negatif untuk melihat gaya tarik-menarik!", target: "attraction", points: 150 },
+                    { description: "Buat gaya sebesar minimal 2.0 N dengan mengatur jarak muatan!", target: "force_2", points: 200 },
+                    { description: "Tempatkan 3 muatan dan analisis gaya resultannya!", target: "three_charges", points: 250 },
+                    { description: "Buat gaya maksimal dengan muatan yang tersedia!", target: "max_force", points: 300 }
+                ];
+                
+                this.init();
+            }
+            
+            init() {
+                this.generateCharges();
+                this.setupEventListeners();
+                this.updateChallenge();
+                this.updateDisplay();
+            }
+            
+            generateCharges() {
+                const chargeBank = document.getElementById('chargeBank');
+                chargeBank.innerHTML = '';
+                this.charges = [];
+                
+                const chargeTypes = [
+                    { type: 'positive', charge: 2, symbol: '+2μC' },
+                    { type: 'positive', charge: 1, symbol: '+1μC' },
+                    { type: 'negative', charge: -2, symbol: '-2μC' },
+                    { type: 'negative', charge: -1, symbol: '-1μC' },
+                    { type: 'positive', charge: 3, symbol: '+3μC' },
+                    { type: 'negative', charge: -3, symbol: '-3μC' }
+                ];
+                
+                // Shuffle charges
+                for (let i = chargeTypes.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [chargeTypes[i], chargeTypes[j]] = [chargeTypes[j], chargeTypes[i]];
+                }
+                
+                chargeTypes.forEach((chargeData, index) => {
+                    const charge = document.createElement('div');
+                    charge.className = `charge w-16 h-16 rounded-full flex items-center justify-center text-white font-bold text-sm cursor-move transition-all duration-300 ${chargeData.type === 'positive' ? 'charge-positive' : 'charge-negative'}`;
+                    charge.draggable = true;
+                    charge.textContent = chargeData.symbol;
+                    charge.dataset.charge = chargeData.charge;
+                    charge.dataset.type = chargeData.type;
+                    charge.dataset.id = index;
+                    
+                    this.setupDragEvents(charge);
+                    chargeBank.appendChild(charge);
+                    this.charges.push(chargeData);
+                });
+            }
+            
+            setupDragEvents(element) {
+                element.addEventListener('dragstart', (e) => {
+                    e.dataTransfer.setData('text/plain', JSON.stringify({
+                        charge: element.dataset.charge,
+                        type: element.dataset.type,
+                        id: element.dataset.id,
+                        symbol: element.textContent
+                    }));
+                    element.classList.add('dragging');
+                });
+                
+                element.addEventListener('dragend', () => {
+                    element.classList.remove('dragging');
+                });
+            }
+            
+            setupEventListeners() {
+                const workspace = document.getElementById('workspace');
+                
+                workspace.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    workspace.classList.add('drag-over');
+                });
+                
+                workspace.addEventListener('dragleave', () => {
+                    workspace.classList.remove('drag-over');
+                });
+                
+                workspace.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    workspace.classList.remove('drag-over');
+                    
+                    const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+                    const rect = workspace.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    
+                    this.addChargeToWorkspace(data, x, y);
+                });
+                
+                document.getElementById('clearWorkspace').addEventListener('click', () => {
+                    this.clearWorkspace();
+                });
+                
+                document.getElementById('shuffleCharges').addEventListener('click', () => {
+                    this.generateCharges();
+                });
+                
+                document.getElementById('newGame').addEventListener('click', () => {
+                    this.newGame();
+                });
+            }
+            
+            addChargeToWorkspace(chargeData, x, y) {
+                const workspace = document.getElementById('workspace');
+                
+                const charge = document.createElement('div');
+                charge.className = `absolute w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-xs cursor-move transition-all duration-300 ${chargeData.type === 'positive' ? 'charge-positive' : 'charge-negative'}`;
+                charge.style.left = `${Math.max(0, Math.min(x - 24, workspace.offsetWidth - 48))}px`;
+                charge.style.top = `${Math.max(0, Math.min(y - 24, workspace.offsetHeight - 48))}px`;
+                charge.textContent = chargeData.symbol;
+                charge.dataset.charge = chargeData.charge;
+                charge.dataset.type = chargeData.type;
+                
+                // Make charges in workspace draggable
+                this.makeWorkspaceChargeDraggable(charge);
+                
+                workspace.appendChild(charge);
+                this.workspaceCharges.push({
+                    element: charge,
+                    charge: parseFloat(chargeData.charge),
+                    type: chargeData.type,
+                    x: parseFloat(charge.style.left),
+                    y: parseFloat(charge.style.top)
+                });
+                
+                this.calculateForces();
+                this.checkChallenge();
+            }
+            
+            makeWorkspaceChargeDraggable(element) {
+                let isDragging = false;
+                let startX, startY, initialX, initialY;
+                
+                element.addEventListener('mousedown', (e) => {
+                    isDragging = true;
+                    startX = e.clientX;
+                    startY = e.clientY;
+                    initialX = parseFloat(element.style.left);
+                    initialY = parseFloat(element.style.top);
+                    element.style.zIndex = '100';
+                });
+                
+                document.addEventListener('mousemove', (e) => {
+                    if (!isDragging) return;
+                    
+                    const workspace = document.getElementById('workspace');
+                    const rect = workspace.getBoundingClientRect();
+                    const newX = initialX + (e.clientX - startX);
+                    const newY = initialY + (e.clientY - startY);
+                    
+                    element.style.left = `${Math.max(0, Math.min(newX, workspace.offsetWidth - 48))}px`;
+                    element.style.top = `${Math.max(0, Math.min(newY, workspace.offsetHeight - 48))}px`;
+                    
+                    this.updateChargePosition(element);
+                    this.calculateForces();
+                });
+                
+                document.addEventListener('mouseup', () => {
+                    if (isDragging) {
+                        isDragging = false;
+                        element.style.zIndex = 'auto';
+                        this.checkChallenge();
+                    }
+                });
+                
+                // Double click to remove
+                element.addEventListener('dblclick', () => {
+                    this.removeChargeFromWorkspace(element);
+                });
+            }
+            
+            updateChargePosition(element) {
+                const chargeIndex = this.workspaceCharges.findIndex(c => c.element === element);
+                if (chargeIndex !== -1) {
+                    this.workspaceCharges[chargeIndex].x = parseFloat(element.style.left);
+                    this.workspaceCharges[chargeIndex].y = parseFloat(element.style.top);
+                }
+            }
+            
+            removeChargeFromWorkspace(element) {
+                const index = this.workspaceCharges.findIndex(c => c.element === element);
+                if (index !== -1) {
+                    this.workspaceCharges.splice(index, 1);
+                    element.remove();
+                    this.clearForceLines();
+                    this.calculateForces();
+                }
+            }
+            
+            calculateForces() {
+                this.clearForceLines();
+                
+                if (this.workspaceCharges.length < 2) {
+                    document.getElementById('currentForce').textContent = '-';
+                    document.getElementById('currentDistance').textContent = '-';
+                    document.getElementById('forceType').textContent = '-';
+                    return;
+                }
+                
+                let maxForce = 0;
+                let maxForceInfo = null;
+                
+                for (let i = 0; i < this.workspaceCharges.length; i++) {
+                    for (let j = i + 1; j < this.workspaceCharges.length; j++) {
+                        const charge1 = this.workspaceCharges[i];
+                        const charge2 = this.workspaceCharges[j];
+                        
+                        const dx = (charge2.x + 24) - (charge1.x + 24);
+                        const dy = (charge2.y + 24) - (charge1.y + 24);
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        const distanceM = distance / 1000; // Convert to meters (simplified)
+                        
+                        const force = Math.abs(this.k * charge1.charge * charge2.charge * 1e-12 / (distanceM * distanceM));
+                        const isAttraction = (charge1.charge > 0 && charge2.charge < 0) || (charge1.charge < 0 && charge2.charge > 0);
+                        
+                        if (force > maxForce) {
+                            maxForce = force;
+                            maxForceInfo = {
+                                force: force,
+                                distance: distance,
+                                isAttraction: isAttraction,
+                                charge1: charge1,
+                                charge2: charge2
+                            };
+                        }
+                        
+                        this.drawForceLine(charge1, charge2, isAttraction);
+                    }
+                }
+                
+                if (maxForceInfo) {
+                    document.getElementById('currentForce').textContent = `${maxForce.toFixed(2)} N`;
+                    document.getElementById('currentDistance').textContent = `${maxForceInfo.distance.toFixed(0)} px`;
+                    document.getElementById('forceType').textContent = maxForceInfo.isAttraction ? '🧲 Tarik-menarik' : '⚡ Tolak-menolak';
+                }
+            }
+            
+            drawForceLine(charge1, charge2, isAttraction) {
+                const workspace = document.getElementById('workspace');
+                const line = document.createElement('div');
+                
+                const x1 = charge1.x + 24;
+                const y1 = charge1.y + 24;
+                const x2 = charge2.x + 24;
+                const y2 = charge2.y + 24;
+                
+                const length = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+                const angle = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+                
+                line.className = `force-line show ${isAttraction ? 'bg-green-500' : 'bg-red-500'}`;
+                line.style.left = `${x1}px`;
+                line.style.top = `${y1}px`;
+                line.style.width = `${length}px`;
+                line.style.transform = `rotate(${angle}deg)`;
+                
+                workspace.appendChild(line);
+            }
+            
+            clearForceLines() {
+                const workspace = document.getElementById('workspace');
+                const lines = workspace.querySelectorAll('.force-line');
+                lines.forEach(line => line.remove());
+            }
+            
+            clearWorkspace() {
+                const workspace = document.getElementById('workspace');
+                const charges = workspace.querySelectorAll('.charge-positive, .charge-negative');
+                charges.forEach(charge => charge.remove());
+                this.workspaceCharges = [];
+                this.clearForceLines();
+                this.calculateForces();
+            }
+            
+            checkChallenge() {
+                const challenge = this.challenges[this.currentChallenge];
+                let completed = false;
+                
+                switch (challenge.target) {
+                    case 'repulsion':
+                        completed = this.workspaceCharges.length >= 2 && 
+                                  this.workspaceCharges.some(c1 => 
+                                      this.workspaceCharges.some(c2 => 
+                                          c1 !== c2 && c1.charge > 0 && c2.charge > 0
+                                      )
+                                  );
+                        break;
+                    case 'attraction':
+                        completed = this.workspaceCharges.length >= 2 && 
+                                  this.workspaceCharges.some(c1 => 
+                                      this.workspaceCharges.some(c2 => 
+                                          c1 !== c2 && ((c1.charge > 0 && c2.charge < 0) || (c1.charge < 0 && c2.charge > 0))
+                                      )
+                                  );
+                        break;
+                    case 'force_2':
+                        completed = this.getCurrentMaxForce() >= 2.0;
+                        break;
+                    case 'three_charges':
+                        completed = this.workspaceCharges.length >= 3;
+                        break;
+                    case 'max_force':
+                        completed = this.getCurrentMaxForce() >= 5.0;
+                        break;
+                }
+                
+                if (completed) {
+                    this.completeChallenge();
+                }
+            }
+            
+            getCurrentMaxForce() {
+                let maxForce = 0;
+                for (let i = 0; i < this.workspaceCharges.length; i++) {
+                    for (let j = i + 1; j < this.workspaceCharges.length; j++) {
+                        const charge1 = this.workspaceCharges[i];
+                        const charge2 = this.workspaceCharges[j];
+                        
+                        const dx = (charge2.x + 24) - (charge1.x + 24);
+                        const dy = (charge2.y + 24) - (charge1.y + 24);
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        const distanceM = distance / 1000;
+                        
+                        const force = Math.abs(this.k * charge1.charge * charge2.charge * 1e-12 / (distanceM * distanceM));
+                        maxForce = Math.max(maxForce, force);
+                    }
+                }
+                return maxForce;
+            }
+            
+            completeChallenge() {
+                const challenge = this.challenges[this.currentChallenge];
+                this.score += challenge.points;
+                
+                // Show completion effect
+                const workspace = document.getElementById('workspace');
+                workspace.classList.add('pulse');
+                setTimeout(() => workspace.classList.remove('pulse'), 2000);
+                
+                this.currentChallenge++;
+                if (this.currentChallenge >= this.challenges.length) {
+                    this.level++;
+                    this.currentChallenge = 0;
+                    this.generateCharges(); // New charges for new level
+                }
+                
+                this.updateChallenge();
+                this.updateDisplay();
+            }
+            
+            updateChallenge() {
+                const challenge = this.challenges[this.currentChallenge];
+                document.getElementById('challengeLevel').textContent = this.level;
+                document.getElementById('challengeText').textContent = challenge.description;
+                
+                const progress = (this.currentChallenge / this.challenges.length) * 100;
+                document.getElementById('progressBar').style.width = `${progress}%`;
+            }
+            
+            updateDisplay() {
+                document.getElementById('score').textContent = this.score;
+                document.getElementById('level').textContent = this.level;
+            }
+            
+            newGame() {
+                this.score = 0;
+                this.level = 1;
+                this.currentChallenge = 0;
+                this.clearWorkspace();
+                this.generateCharges();
+                this.updateChallenge();
+                this.updateDisplay();
+            }
+        }
+        
+        // Initialize game when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new CoulombGame();
+        });
+    </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9847abbc470398b3',t:'MTc1ODc3MzQxNi4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
